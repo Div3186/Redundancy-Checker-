@@ -1,70 +1,55 @@
 import streamlit as st
 import pandas as pd
 import io
+from collections import Counter
+import re
 
-st.title("📊 Redundancy Checker")
+st.title("📊 Redundancy Theme Checker")
 
 uploaded_file = st.file_uploader("Upload Excel or CSV File", type=["xlsx", "csv"])
 
 if uploaded_file is not None:
     try:
-        output = {}
+        df = None
         if uploaded_file.name.endswith('.xlsx'):
-            excel_file = pd.ExcelFile(uploaded_file)
-            for sheet in excel_file.sheet_names:
-                df = pd.read_excel(uploaded_file, sheet_name=sheet)
-                dup_rows = df[df.duplicated()]
-                # Mark columns as duplicate if >50% of values are repeated
-                dup_columns = [col for col in df.columns if df[col].duplicated().sum() > 0.5 * len(df)]
-
-                output[f"{sheet}_duplicate_rows"] = dup_rows if not dup_rows.empty else pd.DataFrame(["No duplicate rows"])
-                output[f"{sheet}_duplicate_columns"] = pd.DataFrame({'Duplicate Columns': dup_columns}) if dup_columns else pd.DataFrame(["No duplicate columns"])
-
-                st.subheader(f"Sheet: {sheet}")
-                st.write(f"✅ Duplicate rows: {len(dup_rows)}")
-                st.write(f"✅ Duplicate fields (thresholded): {dup_columns if dup_columns else 'None'}")
-
-                # Always show search box
-                st.write("Search or explore data:")
-                search = st.text_input(f"Search in {sheet}", key=sheet)
-                search_base = dup_rows if not dup_rows.empty else df
-                if search:
-                    filtered = search_base[search_base.apply(lambda row: row.astype(str).str.contains(search, case=False).any(), axis=1)]
-                    st.dataframe(filtered)
-                else:
-                    st.dataframe(search_base)
+            df = pd.read_excel(uploaded_file)
         elif uploaded_file.name.endswith('.csv'):
             df = pd.read_csv(uploaded_file)
-            dup_rows = df[df.duplicated()]
-            dup_columns = [col for col in df.columns if df[col].duplicated().sum() > 0.5 * len(df)]
 
-            output["CSV_duplicate_rows"] = dup_rows if not dup_rows.empty else pd.DataFrame(["No duplicate rows"])
-            output["CSV_duplicate_columns"] = pd.DataFrame({'Duplicate Columns': dup_columns}) if dup_columns else pd.DataFrame(["No duplicate columns"])
+        if df is not None:
+            st.write("Columns available:", list(df.columns))
+            col_name = st.selectbox("Select the column to check redundancy/themes:", df.columns)
 
-            st.subheader("CSV File")
-            st.write(f"✅ Duplicate rows: {len(dup_rows)}")
-            st.write(f"✅ Duplicate fields (thresholded): {dup_columns if dup_columns else 'None'}")
+            # Clean and split text into words
+            all_text = df[col_name].dropna().astype(str).str.lower()
+            words = []
+            for line in all_text:
+                tokens = re.findall(r'\w+', line)
+                words.extend(tokens)
 
-            st.write("Search or explore data:")
-            search = st.text_input("Search in CSV")
-            search_base = dup_rows if not dup_rows.empty else df
+            # Count word frequencies
+            word_counts = Counter(words)
+            word_freq_df = pd.DataFrame(word_counts.items(), columns=['Word', 'Frequency']).sort_values(by='Frequency', ascending=False)
+
+            st.subheader("Top Redundant Words / Themes")
+            st.dataframe(word_freq_df)
+
+            # Filter/search box
+            search = st.text_input("Search themes (words) here")
             if search:
-                filtered = search_base[search_base.apply(lambda row: row.astype(str).str.contains(search, case=False).any(), axis=1)]
+                filtered = word_freq_df[word_freq_df['Word'].str.contains(search, case=False)]
                 st.dataframe(filtered)
-            else:
-                st.dataframe(search_base)
 
-        # Downloadable Excel report
-        if output:
+            # Download report
             excel_bytes = io.BytesIO()
             with pd.ExcelWriter(excel_bytes, engine='openpyxl') as writer:
-                for sheet_name, df_out in output.items():
-                    df_out.to_excel(writer, sheet_name=sheet_name, index=False)
+                df.to_excel(writer, sheet_name='OriginalData', index=False)
+                word_freq_df.to_excel(writer, sheet_name='RedundancyThemes', index=False)
             excel_bytes.seek(0)
             st.download_button(
-                label="📥 Download Excel Report",
+                label="📥 Download Excel Report with Themes",
                 data=excel_bytes,
-                file_name="redundancy_report.xlsx",
+                file_name="redundancy_themes_report.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
 
