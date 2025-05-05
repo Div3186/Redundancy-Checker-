@@ -1,10 +1,10 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import io
-from collections import Counter
 import re
 
-st.title("📊 Redundancy Theme Checker")
+st.title("📊 Redundancy Theme Matrix Checker")
 
 uploaded_file = st.file_uploader("Upload Excel or CSV File", type=["xlsx", "csv"])
 
@@ -12,44 +12,57 @@ if uploaded_file is not None:
     try:
         df = None
         if uploaded_file.name.endswith('.xlsx'):
-            df = pd.read_excel(uploaded_file)
+            df = pd.read_excel(uploaded_file, sheet_name=None)  # all sheets
         elif uploaded_file.name.endswith('.csv'):
-            df = pd.read_csv(uploaded_file)
+            df = {"CSV": pd.read_csv(uploaded_file)}
 
-        if df is not None:
-            st.write("Columns available:", list(df.columns))
-            col_name = st.selectbox("Select the column to check redundancy/themes:", df.columns)
+        for sheet_name, data in df.items():
+            st.subheader(f"Sheet: {sheet_name}")
 
-            # Clean and split text into words
-            all_text = df[col_name].dropna().astype(str).str.lower()
-            words = []
-            for line in all_text:
-                tokens = re.findall(r'\w+', line)
-                words.extend(tokens)
+            st.write("Columns available:", list(data.columns))
+            col_options = ["All Columns"] + list(data.columns)
+            col_choice = st.selectbox(f"Select column to analyze in {sheet_name}:", col_options, key=sheet_name)
 
-            # Count word frequencies
-            word_counts = Counter(words)
-            word_freq_df = pd.DataFrame(word_counts.items(), columns=['Word', 'Frequency']).sort_values(by='Frequency', ascending=False)
+            # Build data to scan
+            if col_choice == "All Columns":
+                scan_data = data.astype(str)
+            else:
+                scan_data = data[[col_choice]].astype(str)
 
-            st.subheader("Top Redundant Words / Themes")
-            st.dataframe(word_freq_df)
+            # Flatten all text into row-wise lists of words
+            word_matrix = []
+            for idx, row in scan_data.iterrows():
+                row_words = set()
+                for val in row:
+                    row_words.update(re.findall(r'\w+', val.lower()))
+                word_matrix.append(row_words)
 
-            # Filter/search box
-            search = st.text_input("Search themes (words) here")
-            if search:
-                filtered = word_freq_df[word_freq_df['Word'].str.contains(search, case=False)]
-                st.dataframe(filtered)
+            # Identify all unique words
+            all_words = sorted(set.union(*word_matrix))
 
-            # Download report
+            # Build binary matrix
+            matrix = []
+            for row_words in word_matrix:
+                matrix.append([1 if word in row_words else 0 for word in all_words])
+
+            matrix_df = pd.DataFrame(matrix, columns=all_words)
+            matrix_df.insert(0, "Row", data.index)
+
+            # Replace 1/0 with checkmark or blank
+            display_df = matrix_df.replace({1: "✓", 0: ""})
+
+            st.write("✅ Redundancy Theme Matrix")
+            st.dataframe(display_df)
+
+            # Downloadable Excel
             excel_bytes = io.BytesIO()
             with pd.ExcelWriter(excel_bytes, engine='openpyxl') as writer:
-                df.to_excel(writer, sheet_name='OriginalData', index=False)
-                word_freq_df.to_excel(writer, sheet_name='RedundancyThemes', index=False)
+                display_df.to_excel(writer, sheet_name=f"{sheet_name}_Matrix", index=False)
             excel_bytes.seek(0)
             st.download_button(
-                label="📥 Download Excel Report with Themes",
+                label=f"📥 Download Excel Report for {sheet_name}",
                 data=excel_bytes,
-                file_name="redundancy_themes_report.xlsx",
+                file_name=f"redundancy_matrix_{sheet_name}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
 
