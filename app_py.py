@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-
+pip install openpyxl
 st.title("📊 Redundancy Checker")
 
 uploaded_file = st.file_uploader("Upload Excel or CSV File", type=["xlsx", "csv"])
