@@ -14,43 +14,45 @@ if uploaded_file is not None:
             for sheet in excel_file.sheet_names:
                 df = pd.read_excel(uploaded_file, sheet_name=sheet)
                 dup_rows = df[df.duplicated()]
-                dup_columns = [col for col in df.columns if df[col].duplicated().any()]
+                # Mark columns as duplicate if >50% of values are repeated
+                dup_columns = [col for col in df.columns if df[col].duplicated().sum() > 0.5 * len(df)]
 
-                # Save for Excel report
                 output[f"{sheet}_duplicate_rows"] = dup_rows if not dup_rows.empty else pd.DataFrame(["No duplicate rows"])
                 output[f"{sheet}_duplicate_columns"] = pd.DataFrame({'Duplicate Columns': dup_columns}) if dup_columns else pd.DataFrame(["No duplicate columns"])
 
                 st.subheader(f"Sheet: {sheet}")
                 st.write(f"✅ Duplicate rows: {len(dup_rows)}")
-                st.write(f"✅ Duplicate fields: {dup_columns if dup_columns else 'None'}")
+                st.write(f"✅ Duplicate fields (thresholded): {dup_columns if dup_columns else 'None'}")
 
-                # Search/filter box for duplicate rows
-                if not dup_rows.empty:
-                    search = st.text_input(f"Search in {sheet}", key=sheet)
-                    if search:
-                        filtered = dup_rows[dup_rows.apply(lambda row: row.astype(str).str.contains(search, case=False).any(), axis=1)]
-                        st.dataframe(filtered)
-                    else:
-                        st.dataframe(dup_rows)
+                # Always show search box
+                st.write("Search or explore data:")
+                search = st.text_input(f"Search in {sheet}", key=sheet)
+                search_base = dup_rows if not dup_rows.empty else df
+                if search:
+                    filtered = search_base[search_base.apply(lambda row: row.astype(str).str.contains(search, case=False).any(), axis=1)]
+                    st.dataframe(filtered)
+                else:
+                    st.dataframe(search_base)
         elif uploaded_file.name.endswith('.csv'):
             df = pd.read_csv(uploaded_file)
             dup_rows = df[df.duplicated()]
-            dup_columns = [col for col in df.columns if df[col].duplicated().any()]
+            dup_columns = [col for col in df.columns if df[col].duplicated().sum() > 0.5 * len(df)]
 
             output["CSV_duplicate_rows"] = dup_rows if not dup_rows.empty else pd.DataFrame(["No duplicate rows"])
             output["CSV_duplicate_columns"] = pd.DataFrame({'Duplicate Columns': dup_columns}) if dup_columns else pd.DataFrame(["No duplicate columns"])
 
             st.subheader("CSV File")
             st.write(f"✅ Duplicate rows: {len(dup_rows)}")
-            st.write(f"✅ Duplicate fields: {dup_columns if dup_columns else 'None'}")
+            st.write(f"✅ Duplicate fields (thresholded): {dup_columns if dup_columns else 'None'}")
 
-            if not dup_rows.empty:
-                search = st.text_input("Search in CSV")
-                if search:
-                    filtered = dup_rows[dup_rows.apply(lambda row: row.astype(str).str.contains(search, case=False).any(), axis=1)]
-                    st.dataframe(filtered)
-                else:
-                    st.dataframe(dup_rows)
+            st.write("Search or explore data:")
+            search = st.text_input("Search in CSV")
+            search_base = dup_rows if not dup_rows.empty else df
+            if search:
+                filtered = search_base[search_base.apply(lambda row: row.astype(str).str.contains(search, case=False).any(), axis=1)]
+                st.dataframe(filtered)
+            else:
+                st.dataframe(search_base)
 
         # Downloadable Excel report
         if output:
