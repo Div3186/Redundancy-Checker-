@@ -16,45 +16,43 @@ if uploaded_file is not None:
                 dup_rows = df[df.duplicated()]
                 dup_columns = [col for col in df.columns if df[col].duplicated().any()]
 
-                # Save to output dict
-                output[f"{sheet}_duplicate_rows"] = dup_rows
-                output[f"{sheet}_duplicate_columns"] = pd.DataFrame({'Duplicate Columns': dup_columns})
+                # Save for Excel report
+                output[f"{sheet}_duplicate_rows"] = dup_rows if not dup_rows.empty else pd.DataFrame(["No duplicate rows"])
+                output[f"{sheet}_duplicate_columns"] = pd.DataFrame({'Duplicate Columns': dup_columns}) if dup_columns else pd.DataFrame(["No duplicate columns"])
 
                 st.subheader(f"Sheet: {sheet}")
                 st.write(f"✅ Duplicate rows: {len(dup_rows)}")
                 st.write(f"✅ Duplicate fields: {dup_columns if dup_columns else 'None'}")
 
-                # Filter/search box
+                # Search/filter box for duplicate rows
                 if not dup_rows.empty:
-                    st.write("Sample duplicate rows (with search):")
                     search = st.text_input(f"Search in {sheet}", key=sheet)
-                    filtered = dup_rows[
-                        dup_rows.apply(lambda row: row.astype(str).str.contains(search, case=False).any(), axis=1)
-                    ] if search else dup_rows
-                    st.dataframe(filtered)
+                    if search:
+                        filtered = dup_rows[dup_rows.apply(lambda row: row.astype(str).str.contains(search, case=False).any(), axis=1)]
+                        st.dataframe(filtered)
+                    else:
+                        st.dataframe(dup_rows)
         elif uploaded_file.name.endswith('.csv'):
             df = pd.read_csv(uploaded_file)
             dup_rows = df[df.duplicated()]
             dup_columns = [col for col in df.columns if df[col].duplicated().any()]
 
-            output["CSV_duplicate_rows"] = dup_rows
-            output["CSV_duplicate_columns"] = pd.DataFrame({'Duplicate Columns': dup_columns})
+            output["CSV_duplicate_rows"] = dup_rows if not dup_rows.empty else pd.DataFrame(["No duplicate rows"])
+            output["CSV_duplicate_columns"] = pd.DataFrame({'Duplicate Columns': dup_columns}) if dup_columns else pd.DataFrame(["No duplicate columns"])
 
             st.subheader("CSV File")
             st.write(f"✅ Duplicate rows: {len(dup_rows)}")
             st.write(f"✅ Duplicate fields: {dup_columns if dup_columns else 'None'}")
 
             if not dup_rows.empty:
-                st.write("Sample duplicate rows (with search):")
                 search = st.text_input("Search in CSV")
-                filtered = dup_rows[
-                    dup_rows.apply(lambda row: row.astype(str).str.contains(search, case=False).any(), axis=1)
-                ] if search else dup_rows
-                st.dataframe(filtered)
-        else:
-            st.error("Unsupported file type. Please upload .xlsx or .csv files only.")
+                if search:
+                    filtered = dup_rows[dup_rows.apply(lambda row: row.astype(str).str.contains(search, case=False).any(), axis=1)]
+                    st.dataframe(filtered)
+                else:
+                    st.dataframe(dup_rows)
 
-        # Create downloadable Excel report
+        # Downloadable Excel report
         if output:
             excel_bytes = io.BytesIO()
             with pd.ExcelWriter(excel_bytes, engine='openpyxl') as writer:
@@ -67,5 +65,6 @@ if uploaded_file is not None:
                 file_name="redundancy_report.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
+
     except Exception as e:
         st.error(f"Error processing file: {str(e)}")
