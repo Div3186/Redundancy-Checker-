@@ -4,7 +4,7 @@ import numpy as np
 import io
 import re
 
-st.title("📊 Redundancy Theme Matrix Checker")
+st.title("📊 Redundancy Checker")
 
 uploaded_file = st.file_uploader("Upload Excel or CSV File", type=["xlsx", "csv"])
 
@@ -51,7 +51,7 @@ if uploaded_file is not None:
             # Replace 1/0 with checkmark or blank
             display_df = matrix_df.replace({1: "✓", 0: ""})
 
-            st.write("✅ Redundancy Theme Matrix")
+            st.write("✅ Redundancy Matrix")
             st.dataframe(display_df)
 
             # Downloadable Excel
