@@ -4,7 +4,7 @@ import numpy as np
 import io
 import re
 
-st.title("📊 Redundancy Theme Matrix with Cell Locations")
+st.title("📊 Redundancy Theme Matrix with File Names")
 
 uploaded_file = st.file_uploader("Upload Excel or CSV File", type=["xlsx", "csv"])
 
@@ -29,8 +29,34 @@ if uploaded_file is not None:
             else:
                 scan_data = data[[col_choice]].astype(str)
 
-            theme_locations = []
+            # Get file name column (assumed to be first column)
+            file_name_col = data.columns[0]
+            file_names = data[file_name_col].astype(str).tolist()
 
+            word_matrix = []
+            for idx, row in scan_data.iterrows():
+                row_words = set()
+                for val in row:
+                    row_words.update(re.findall(r'\w+', val.lower()))
+                word_matrix.append(row_words)
+
+            all_words = sorted(set.union(*word_matrix))
+
+            matrix = []
+            for row_words in word_matrix:
+                matrix.append([1 if word in row_words else 0 for word in all_words])
+
+            matrix_df = pd.DataFrame(matrix, columns=all_words)
+            matrix_df.insert(0, "File Name", file_names)
+            matrix_df.insert(1, "Row", data.index)
+
+            display_df = matrix_df.replace({1: "✓", 0: ""})
+
+            st.subheader("✅ Redundancy Matrix (with File Names)")
+            st.dataframe(display_df)
+
+            # Exact cell locations report
+            theme_locations = []
             for row_idx, row in scan_data.iterrows():
                 for col_name, cell_value in row.items():
                     words = re.findall(r'\w+', str(cell_value).lower())
@@ -38,31 +64,22 @@ if uploaded_file is not None:
                         theme_locations.append({
                             'Theme': word,
                             'Row Index': row_idx,
+                            'File Name': file_names[row_idx],
                             'Column': col_name,
                             'Cell Value': cell_value
                         })
 
-            # Convert to DataFrame
             theme_df = pd.DataFrame(theme_locations)
-            if theme_df.empty:
-                st.info("No themes/words found in this sheet or column.")
-                continue
-
-            # Summary matrix: row vs. themes
-            summary = theme_df.pivot_table(index='Row Index', columns='Theme', aggfunc='size', fill_value=0)
-            summary = summary.applymap(lambda x: '✓' if x > 0 else '')
-
-            st.subheader("✅ Redundancy Theme Matrix")
-            st.dataframe(summary)
-
-            st.subheader("📍 Exact Cell Locations (Row, Column, Value)")
-            st.dataframe(theme_df)
+            if not theme_df.empty:
+                st.subheader("📍 Exact Cell Locations (with File Names)")
+                st.dataframe(theme_df)
 
             # Downloadable Excel report
             excel_bytes = io.BytesIO()
             with pd.ExcelWriter(excel_bytes, engine='openpyxl') as writer:
-                summary.to_excel(writer, sheet_name=f"{sheet_name}_Matrix")
-                theme_df.to_excel(writer, sheet_name=f"{sheet_name}_Locations", index=False)
+                display_df.to_excel(writer, sheet_name=f"{sheet_name}_Matrix", index=False)
+                if not theme_df.empty:
+                    theme_df.to_excel(writer, sheet_name=f"{sheet_name}_Locations", index=False)
             excel_bytes.seek(0)
             st.download_button(
                 label=f"📥 Download Excel Report for {sheet_name}",
