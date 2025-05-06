@@ -4,7 +4,7 @@ import numpy as np
 import io
 import re
 
-st.title("📊 Redundancy Checker")
+st.title("📊 Redundancy Theme Matrix with Cell Locations")
 
 uploaded_file = st.file_uploader("Upload Excel or CSV File", type=["xlsx", "csv"])
 
@@ -23,41 +23,46 @@ if uploaded_file is not None:
             col_options = ["All Columns"] + list(data.columns)
             col_choice = st.selectbox(f"Select column to analyze in {sheet_name}:", col_options, key=sheet_name)
 
-            # Build data to scan
+            # Prepare data
             if col_choice == "All Columns":
                 scan_data = data.astype(str)
             else:
                 scan_data = data[[col_choice]].astype(str)
 
-            # Flatten all text into row-wise lists of words
-            word_matrix = []
-            for idx, row in scan_data.iterrows():
-                row_words = set()
-                for val in row:
-                    row_words.update(re.findall(r'\w+', val.lower()))
-                word_matrix.append(row_words)
+            theme_locations = []
 
-            # Identify all unique words
-            all_words = sorted(set.union(*word_matrix))
+            for row_idx, row in scan_data.iterrows():
+                for col_name, cell_value in row.items():
+                    words = re.findall(r'\w+', str(cell_value).lower())
+                    for word in words:
+                        theme_locations.append({
+                            'Theme': word,
+                            'Row Index': row_idx,
+                            'Column': col_name,
+                            'Cell Value': cell_value
+                        })
 
-            # Build binary matrix
-            matrix = []
-            for row_words in word_matrix:
-                matrix.append([1 if word in row_words else 0 for word in all_words])
+            # Convert to DataFrame
+            theme_df = pd.DataFrame(theme_locations)
+            if theme_df.empty:
+                st.info("No themes/words found in this sheet or column.")
+                continue
 
-            matrix_df = pd.DataFrame(matrix, columns=all_words)
-            matrix_df.insert(0, "Row", data.index)
+            # Summary matrix: row vs. themes
+            summary = theme_df.pivot_table(index='Row Index', columns='Theme', aggfunc='size', fill_value=0)
+            summary = summary.applymap(lambda x: '✓' if x > 0 else '')
 
-            # Replace 1/0 with checkmark or blank
-            display_df = matrix_df.replace({1: "✓", 0: ""})
+            st.subheader("✅ Redundancy Theme Matrix")
+            st.dataframe(summary)
 
-            st.write("✅ Redundancy Matrix")
-            st.dataframe(display_df)
+            st.subheader("📍 Exact Cell Locations (Row, Column, Value)")
+            st.dataframe(theme_df)
 
-            # Downloadable Excel
+            # Downloadable Excel report
             excel_bytes = io.BytesIO()
             with pd.ExcelWriter(excel_bytes, engine='openpyxl') as writer:
-                display_df.to_excel(writer, sheet_name=f"{sheet_name}_Matrix", index=False)
+                summary.to_excel(writer, sheet_name=f"{sheet_name}_Matrix")
+                theme_df.to_excel(writer, sheet_name=f"{sheet_name}_Locations", index=False)
             excel_bytes.seek(0)
             st.download_button(
                 label=f"📥 Download Excel Report for {sheet_name}",
