@@ -4,7 +4,7 @@ import numpy as np
 import io
 import re
 
-st.title("📊 Redundancy Theme Matrix with File Names")
+st.title("📊 Redundancy Matrix")
 
 uploaded_file = st.file_uploader("Upload Excel or CSV File", type=["xlsx", "csv"])
 
@@ -52,7 +52,7 @@ if uploaded_file is not None:
 
             display_df = matrix_df.replace({1: "✓", 0: ""})
 
-            st.subheader("✅ Redundancy Matrix (with File Names)")
+            st.subheader("✅ Redundancy Matrix")
             st.dataframe(display_df)
 
             # Exact cell locations report
@@ -71,7 +71,7 @@ if uploaded_file is not None:
 
             theme_df = pd.DataFrame(theme_locations)
             if not theme_df.empty:
-                st.subheader("📍 Exact Cell Locations (with File Names)")
+                st.subheader("📍 Exact Cell Locations")
                 st.dataframe(theme_df)
 
             # Downloadable Excel report
